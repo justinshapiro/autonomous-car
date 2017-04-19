@@ -14,8 +14,8 @@ VL6180X sensor;
 #define spead     200 //define the spead of motor
 
 // Ultrasonic sensor
-#define trigger 1
-#define echo 2
+#define trigger 4
+#define echo 5
 
 // Motor control routines
 void forward() {
@@ -81,6 +81,20 @@ void stop() {
   delay(2000);
 }
 
+int getLaserRange() {
+  return sensor.readRangeSingleMillimeters()
+}
+
+short getUltrasonic() {
+  digitalWrite(trigger, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigger, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger, LOW);
+  short duration = pulseIn(echo, HIGH);
+  return (5 * duration) / 29.1;
+}
+
 // Car control routine
 void setup() {
   Serial.begin(9600);
@@ -102,25 +116,16 @@ void setup() {
   sensor.init();
   sensor.configureDefault();
   sensor.setTimeout(500);
-}
 
-short getUltrasonic() {
-  digitalWrite(trigger, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigger, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigger, LOW);
-  short duration = pulseIn(echo, HIGH);
-  return (5 * duration) / 29.1;
+  // Start car
+  forward();
 }
 
 void loop() {
   // Ultrasonic sensor
   Serial.println(getUltrasonic());
 
-  // Motor
-  forward(); // options: left(), right(), backward()
 
   // Laser Range sensor
-  Serial.print(sensor.readRangeSingleMillimeters());
+  Serial.print(getLaserRange());
 }
