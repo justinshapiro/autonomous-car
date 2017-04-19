@@ -120,16 +120,26 @@ void setup() {
   sensor.init();
   sensor.configureDefault();
   sensor.setTimeout(500);
+
+  // Start car
+  forward();
 }
 
 void loop() {
   // Ultrasonic sensor
-  int ultrasonicData = getUltrasonic();
+  unsigned int ultrasonicData = abs(getUltrasonic());
   Serial.println(ultrasonicData);
-  if (ultrasonicData <= distanceThreshold) {
+  if (ultrasonicData <= distanceThreshold && !stopped) {
+      Serial.println("Distance <= 50, stopping & backing up");
+      stop();
+      stopped = true;
+      backward();
+  } else if (ultrasonicData > distanceThreshold && stopped) {
+    if (stopped) {
+      stopped = false;
+    }
+    Serial.println("Distance >= 50, stopping & going forward");
     stop();
-    backward();
-  } else {
     forward();
   }
   
@@ -138,4 +148,6 @@ void loop() {
 
   // Laser Range sensor
   //Serial.println("Laser Range: " + String(getLaserRange()));
+
+  delay(100);
 }
