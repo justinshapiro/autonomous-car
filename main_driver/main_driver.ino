@@ -11,17 +11,21 @@ VL6180X sensor;
 #define pinI3     12 //define IN3 interface 
 #define pinI4     13 //define IN4 interface 
 #define speedpinB 10 //enable motor B
-#define spead     200 //define the spead of motor
+#define _speed1   250 // define the speed of motor A
+#define _speed2   233 // define the speed of motor B
 
 // Ultrasonic sensor
 #define trigger 4
 #define echo 5
 
+const int distanceThreshold = 100;
+bool stopped = false;
+
 // Motor control routines
 void forward() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA,spead);
-  analogWrite(speedpinB,spead);
+  analogWrite(speedpinA,_speed1);
+  analogWrite(speedpinB,_speed2);
 
   //turn DC Motor B move clockwise
   digitalWrite(pinI4,HIGH);
@@ -34,8 +38,8 @@ void forward() {
  
 void backward() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA,spead);
-  analogWrite(speedpinB,spead);
+  analogWrite(speedpinA,_speed1);
+  analogWrite(speedpinB,_speed2);
   
   //turn DC Motor B move anticlockwise
   digitalWrite(pinI4,LOW);
@@ -48,8 +52,8 @@ void backward() {
  
 void left() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA,spead);
-  analogWrite(speedpinB,spead);
+  analogWrite(speedpinA,_speed1);
+  analogWrite(speedpinB,_speed2);
   
   //turn DC Motor B move clockwise
   digitalWrite(pinI4,HIGH);
@@ -62,8 +66,8 @@ void left() {
  
 void right() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA,spead);
-  analogWrite(speedpinB,spead);
+  analogWrite(speedpinA,_speed1);
+  analogWrite(speedpinB,_speed2);
 
   //turn DC Motor B move anticlockwise
   digitalWrite(pinI4,LOW);
@@ -82,10 +86,10 @@ void stop() {
 }
 
 int getLaserRange() {
-  return sensor.readRangeSingleMillimeters()
+  return sensor.readRangeSingleMillimeters();
 }
 
-short getUltrasonic() {
+int getUltrasonic() {
   digitalWrite(trigger, LOW);
   delayMicroseconds(2);
   digitalWrite(trigger, HIGH);
@@ -116,16 +120,22 @@ void setup() {
   sensor.init();
   sensor.configureDefault();
   sensor.setTimeout(500);
-
-  // Start car
-  forward();
 }
 
 void loop() {
   // Ultrasonic sensor
-  Serial.println(getUltrasonic());
+  int ultrasonicData = getUltrasonic();
+  Serial.println(ultrasonicData);
+  if (ultrasonicData <= distanceThreshold) {
+    stop();
+    backward();
+  } else {
+    forward();
+  }
+  
+  // Serial.println("Ultrasonic: " + String(getUltrasonic()));
 
 
   // Laser Range sensor
-  Serial.print(getLaserRange());
+  //Serial.println("Laser Range: " + String(getLaserRange()));
 }
