@@ -1,8 +1,10 @@
-#include <Wire.h>
-#include <VL6180X.h>
-
-// Laser Range sensors
-VL6180X sensor;
+extern "C" {
+  #include <stdlib.h>
+  #include <stdio.h>
+  #include <string.h>
+  #include <inttypes.h>
+}
+#include "Adafruit_VL6180X.h"
 
 // Motor
 #define pinI1     8  //define IN1 interface
@@ -12,13 +14,18 @@ VL6180X sensor;
 #define pinI4     13 //define IN4 interface 
 #define speedpinB 10 //enable motor B
 #define _speed1   250 // define the speed of motor A
-#define _speed2   233 // define the speed of motor B
+#define _speed2   210 // define the speed of motor B
 
 // Ultrasonic sensor
 #define trigger 4
 #define echo 5
 
-const int distanceThreshold = 100;
+// Laser Range sensors
+Adafruit_VL6180X lasers;
+byte sensor1_pin = 3; // SHutDowN pin
+byte sensor2_pin = 6;
+
+const int distanceThreshold = 50;
 bool stopped = false;
 
 // Motor control routines
@@ -85,8 +92,20 @@ void stop() {
   delay(2000);
 }
 
-int getLaserRange() {
-  return sensor.readRangeSingleMillimeters();
+int getRight() {
+  digitalWrite(sensor2_pin, LOW); 
+  digitalWrite(sensor1_pin, HIGH); 
+  lasers.begin(); 
+  delay(1);
+  return lasers.readRange();
+}
+
+int getLeft() {
+  digitalWrite(sensor1_pin, LOW); 
+  digitalWrite(sensor2_pin, HIGH); 
+  lasers.begin();
+  delay(1);
+  return lasers.readRange();
 }
 
 int getUltrasonic() {
@@ -116,38 +135,20 @@ void setup() {
   pinMode(speedpinB,OUTPUT);
 
   // Laser Range sensor
+  pinMode(sensor1_pin, OUTPUT);
+  pinMode(sensor2_pin, OUTPUT);
+  digitalWrite(sensor1_pin, LOW); // Disable laser1
+  digitalWrite(sensor2_pin, LOW); // Disable laser2
   Wire.begin();
-  sensor.init();
-  sensor.configureDefault();
-  sensor.setTimeout(500);
 
   // Start car
   forward();
 }
 
 void loop() {
-  // Ultrasonic sensor
-  unsigned int ultrasonicData = abs(getUltrasonic());
-  Serial.println(ultrasonicData);
-  if (ultrasonicData <= distanceThreshold && !stopped) {
-      Serial.println("Distance <= 50, stopping & backing up");
-      stop();
-      stopped = true;
-      backward();
-  } else if (ultrasonicData > distanceThreshold && stopped) {
-    if (stopped) {
-      stopped = false;
-    }
-    Serial.println("Distance >= 50, stopping & going forward");
-    stop();
-    forward();
-  }
-  
-  // Serial.println("Ultrasonic: " + String(getUltrasonic()));
-
-
   // Laser Range sensor
-  //Serial.println("Laser Range: " + String(getLaserRange()));
-
-  delay(100);
+  Serial.println("Left: " + String(getLeft()));
+  delay(50);
+  Serial.println("Right: " + String(getRight()));
+  delay(50);
 }
