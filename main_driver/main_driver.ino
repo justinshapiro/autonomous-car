@@ -14,7 +14,7 @@ extern "C" {
 #define pinI4     13 //define IN4 interface 
 #define speedpinB 10 //enable motor B
 #define _speed1   250 // define the speed of motor A
-#define _speed2   210 // define the speed of motor B
+#define _speed2   250 // define the speed of motor B
 
 // Ultrasonic sensor
 #define trigger 4
@@ -22,11 +22,11 @@ extern "C" {
 
 // Laser Range sensors
 Adafruit_VL6180X lasers;
-byte sensor1_pin = 3; // SHutDowN pin
+byte sensor1_pin = 3; 
 byte sensor2_pin = 6;
+byte sensor3_pin = 5;
 
-const int distanceThreshold = 50;
-bool stopped = false;
+const int distanceThreshold = 40;
 
 // Motor control routines
 void forward() {
@@ -86,14 +86,15 @@ void right() {
 }
  
 void stop() {
-  digitalWrite(speedpinA,LOW);
-  //Unenble the pin, to stop the motor. This should be done to avid damaging the motor. 
+  digitalWrite(speedpinA,LOW); 
   digitalWrite(speedpinB,LOW);
   delay(2000);
 }
 
 int getRight() {
+  delay(50);
   digitalWrite(sensor2_pin, LOW); 
+  digitalWrite(sensor3_pin, LOW);
   digitalWrite(sensor1_pin, HIGH); 
   lasers.begin(); 
   delay(1);
@@ -101,21 +102,23 @@ int getRight() {
 }
 
 int getLeft() {
+  delay(50);
   digitalWrite(sensor1_pin, LOW); 
+  digitalWrite(sensor3_pin, LOW);
   digitalWrite(sensor2_pin, HIGH); 
   lasers.begin();
   delay(1);
   return lasers.readRange();
 }
 
-int getUltrasonic() {
-  digitalWrite(trigger, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigger, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigger, LOW);
-  short duration = pulseIn(echo, HIGH);
-  return (5 * duration) / 29.1;
+int getFront() {
+  delay(50);
+  digitalWrite(sensor1_pin, LOW); 
+  digitalWrite(sensor2_pin, LOW);
+  digitalWrite(sensor3_pin, HIGH); 
+  lasers.begin();
+  delay(1);
+  return lasers.readRange();
 }
 
 // Car control routine
@@ -137,8 +140,10 @@ void setup() {
   // Laser Range sensor
   pinMode(sensor1_pin, OUTPUT);
   pinMode(sensor2_pin, OUTPUT);
+  pinMode(sensor3_pin, OUTPUT);
   digitalWrite(sensor1_pin, LOW); // Disable laser1
   digitalWrite(sensor2_pin, LOW); // Disable laser2
+  digitalWrite(sensor3_pin, LOW); // Disable laser3
   Wire.begin();
 
   // Start car
@@ -146,9 +151,28 @@ void setup() {
 }
 
 void loop() {
-  // Laser Range sensor
-  Serial.println("Left: " + String(getLeft()));
-  delay(50);
-  Serial.println("Right: " + String(getRight()));
-  delay(50);
+  if (getLeft() <= distanceThreshold) {
+    stop();
+    while (getLeft() <= distanceThreshold){
+      right();
+    }
+    stop();
+    forward();
+  }
+  else if (getRight() <= distanceThreshold) {
+    stop();
+    while (getRight() <= distanceThreshold) {
+      left();
+    }
+    stop();
+    forward();
+  }
+  else if (getFront() <= distanceThreshold) {
+    stop();
+    while (getFront() <= distanceThreshold) {
+      backward();
+    }
+    stop();
+    forward();
+  }  
 }
