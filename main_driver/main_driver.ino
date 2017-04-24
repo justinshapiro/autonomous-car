@@ -4,6 +4,7 @@ extern "C" {
   #include <string.h>
   #include <inttypes.h>
 }
+
 #include "Adafruit_VL6180X.h"
 
 // Motor
@@ -26,7 +27,7 @@ byte sensor1_pin = 3;
 byte sensor2_pin = 6;
 byte sensor3_pin = 5;
 
-const int distanceThreshold = 40;
+const int distanceThreshold = 70;
 
 // Motor control routines
 void forward() {
@@ -98,6 +99,7 @@ int getRight() {
   digitalWrite(sensor1_pin, HIGH); 
   lasers.begin(); 
   delay(1);
+  Serial.println("Right: " + String(lasers.readRange()));
   return lasers.readRange();
 }
 
@@ -108,6 +110,7 @@ int getLeft() {
   digitalWrite(sensor2_pin, HIGH); 
   lasers.begin();
   delay(1);
+  Serial.println("Left: " + String(lasers.readRange()));
   return lasers.readRange();
 }
 
@@ -118,6 +121,7 @@ int getFront() {
   digitalWrite(sensor3_pin, HIGH); 
   lasers.begin();
   delay(1);
+  Serial.println("Front: " + String(lasers.readRange()));
   return lasers.readRange();
 }
 
@@ -141,9 +145,9 @@ void setup() {
   pinMode(sensor1_pin, OUTPUT);
   pinMode(sensor2_pin, OUTPUT);
   pinMode(sensor3_pin, OUTPUT);
-  digitalWrite(sensor1_pin, LOW); // Disable laser1
-  digitalWrite(sensor2_pin, LOW); // Disable laser2
-  digitalWrite(sensor3_pin, LOW); // Disable laser3
+  digitalWrite(sensor1_pin, LOW);
+  digitalWrite(sensor2_pin, LOW);
+  digitalWrite(sensor3_pin, LOW); 
   Wire.begin();
 
   // Start car
@@ -151,28 +155,18 @@ void setup() {
 }
 
 void loop() {
-  if (getLeft() <= distanceThreshold) {
-    stop();
-    while (getLeft() <= distanceThreshold){
-      right();
-    }
-    stop();
-    forward();
+  while (getFront() <= distanceThreshold) {
+    backward();
   }
-  else if (getRight() <= distanceThreshold) {
-    stop();
-    while (getRight() <= distanceThreshold) {
-      left();
-    }
-    stop();
-    forward();
+  forward();
+
+  while (getLeft() <= distanceThreshold){
+    right();
   }
-  else if (getFront() <= distanceThreshold) {
-    stop();
-    while (getFront() <= distanceThreshold) {
-      backward();
-    }
-    stop();
-    forward();
-  }  
+  forward();
+
+  while (getRight() <= distanceThreshold) {
+    left();
+  }
+  forward();
 }
