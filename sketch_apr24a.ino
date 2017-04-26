@@ -29,6 +29,7 @@ byte sensor3_pin = 5;
 
 const int distanceThreshold = 70;
 const int wallDistance = 50;
+const int maxSensorDistance = 255;
 
 // Motor control routines
 void forward() {
@@ -193,7 +194,12 @@ void loop() {
   
   while (getFront() <= distanceThreshold) {
     backward();
-    right();
+    if (getRight() > maxSensorDistance){
+      right();
+    }
+    if (getLeft() > maxSensorDistance){
+      left();
+    }
     while (getRight() <= distanceThreshold) {
       left();
     }
