@@ -125,6 +125,69 @@ int getFront() {
   return lasers.readRange();
 }
 
+/********** Navigation **********/
+
+
+const unsigned char NAVIGATION_FRONT = 0x01;//   0001
+const unsigned char NAVIGATION_LEFT =  0x02;//   0010
+const unsigned char NAVIGATION_RIGHT = 0x04;//   0100
+//Reserved for future additions:
+const unsigned char NAVIGATION_TURNING = 0x08;// 1000
+
+const int NAVIGATION_THRESHOLD = 10;
+
+unsigned char getState()
+{
+    unsigned char state = 0;
+    
+    if(getFront() < NAVIGATION_THRESHOLD)
+        state |= NAVIGATION_FRONT;
+    if(getLeft() < NAVIGATION_THRESHOLD)
+        state |= NAVIGATION_LEFT;
+    if(getRight() < NAVIGATION_THRESHOLD)
+        state |= NAVIGATION_RIGHT;
+    
+    return state;
+}
+
+void navigation_mainLoop()
+{
+    while(true)
+    {
+        switch(getState())
+        {
+        case NAVIGATION_FRONT:
+            go90Right();
+            break;
+        case NAVIGATION_LEFT:
+            forward();
+            break;
+        case NAVIGATION_RIGHT:
+            forward();
+            break;
+        case NAVIGATION_FRONT | NAVIGATION_LEFT:
+            go90Right();
+            break;
+        case NAVIGATION_FRONT | NAVIGATION_RIGHT:
+            go90Left();
+            break;
+        case NAVIGATION_LEFT | NAVIGATION_RIGHT:
+            forward();
+            break;
+        case NAVIGATION_FRONT | NAVIGATION_LEFT | NAVIGATION_RIGHT:
+            go90Right();
+            go90Right();
+            break;
+        }
+        delay(400);
+        stop();
+    }
+}
+
+
+
+/********** End navigation **********/
+
 // Car control routine
 void setup() {
   Serial.begin(9600);
