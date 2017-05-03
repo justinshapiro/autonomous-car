@@ -25,11 +25,15 @@ extern "C" {
 Adafruit_VL6180X lasers;
 byte sensor1_pin = 2; // right
 byte sensor2_pin = 6; // left
-byte sensor3_pin = 5; // front
 
-const int distanceThreshold = 100; 
-const int wallDistance = 70;
-const int maxSensorDistance = 255;
+const int distanceThreshold = 255; 
+const int wallDistance = 50;
+int _front;
+int _left;
+int _right;
+bool front_free = false;
+bool left_free = false;
+bool right_free = false;
 
 // Motor control routines
 void forward() {
@@ -44,6 +48,14 @@ void forward() {
   //turn DC Motor A move anticlockwise
   digitalWrite(pinI2,HIGH);
   digitalWrite(pinI1,LOW);
+
+  if (getLeft() < wallDistance) {
+    slightlyRight();
+  }
+
+  if (getRight() < wallDistance) {
+    slightlyLeft();
+  }
 }
  
 void backward() {
@@ -101,10 +113,7 @@ void slightlyRight(){
   digitalWrite(pinI2,LOW);
   digitalWrite(pinI1,HIGH);
 
-  delay(400);
-  forward();
-  delay(400);
-  stop();
+  delay(200);
 }
 
 void slightlyLeft(){
@@ -120,10 +129,7 @@ void slightlyLeft(){
   digitalWrite(pinI2,HIGH);
   digitalWrite(pinI1,LOW);
 
-  delay(400);
-  forward();
-  delay(400);
-  stop();
+  delay(200);
 }
  
 void stop() {
@@ -135,7 +141,6 @@ void stop() {
 int getRight() {
   delay(50);
   digitalWrite(sensor2_pin, LOW); 
-  digitalWrite(sensor3_pin, LOW);
   digitalWrite(sensor1_pin, HIGH); 
   lasers.begin(); 
   delay(1);
@@ -146,7 +151,6 @@ int getRight() {
 int getLeft() {
   delay(50);
   digitalWrite(sensor1_pin, LOW); 
-  digitalWrite(sensor3_pin, LOW);
   digitalWrite(sensor2_pin, HIGH); 
   lasers.begin();
   delay(1);
@@ -161,8 +165,12 @@ int getFront() {
   delayMicroseconds(10);
   digitalWrite(trigger, LOW);
   short duration = pulseIn(echo, HIGH);
-  Serial.println("Front: " + String((5 * duration) / 29.1));
-  return abs((5 * duration) / 29.1);
+  int result = abs((5 * duration) / 29.1);
+  if (result > 255 || result == 0) {
+    result = 255;
+  }
+  Serial.println("Front: " + String(result));
+  return result;
 }
 
 void go90Left() {
@@ -173,6 +181,46 @@ void go90Left() {
 void go90Right() {
   right();
   delay(400);  
+}
+
+int getState() {
+  _front = getFront();
+  _right = getRight();
+  _left = getLeft();
+
+  if (_front > wallDistance) {
+    front_free = true;
+  } else {
+    front_free = false;
+  }
+
+  if (_left > distanceThreshold) {
+    left_free = true;
+  } else {
+    left_free = false;
+  }
+
+  if (_right > distanceThreshold) {
+    right_free = true;
+  } else {
+    right_free = false;
+  }
+
+  if (front_free && !left_free && !right_free) {
+    return 0;
+  } else if (front_free && left_free && !right_free) {
+    return 0;
+  } else if (front_free && left_free && right_free) {
+    return 0;
+  } else if (!front_free && left_free && right_free) {
+    return 1;
+  } else if (!front_free && !left_free && right_free) {
+    return 1;
+  } else if (!front_free && !left_free && !right_free) {
+    return 2;
+  } else if (!front_free && left_free && !right_free) {
+    return 3;
+  } 
 }
 
 // Car control routine
@@ -194,25 +242,44 @@ void setup() {
   // Laser Range sensor
   pinMode(sensor1_pin, OUTPUT);
   pinMode(sensor2_pin, OUTPUT);
-  //pinMode(sensor3_pin, OUTPUT);
   digitalWrite(sensor1_pin, LOW);
   digitalWrite(sensor2_pin, LOW);
-  // digitalWrite(sensor3_pin, LOW); 
   Wire.begin();
 
+  delay(5000);
   // Start car
   forward();
 }
 
 void loop() {
-  int _front = getFront();
-  int _left = getLeft();
-  int _right = getRight();
+  int state = getState();
+  switch (state) {
+    case 0: {
+      // Move forward
+      forward();
+    } break;
+    case 1: {
+      // Move right, then forward
+      go90Right();
+      forward();
+    } break;
+    case 2: {
+      // Turn around, then forward
+      go90Right();
+      go90Right();
+      forward();
+    } break;
+    case 3: {
+      // Move left, then forward
+      go90Left();
+      forward();
+    } break;
+    default: break;
+  }
 
-
+  /*
   // Handle the event that something is in the front
   if (_front <= distanceThreshold) {
-    stop();
     if (_left > wallDistance) {
       go90Left();
     } else if (_right > wallDistance) {
@@ -226,5 +293,5 @@ void loop() {
   }
   if (getRight() <= wallDistance) {
     slightlyLeft();
-  }
+  }*/
 }
