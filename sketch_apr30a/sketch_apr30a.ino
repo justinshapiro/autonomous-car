@@ -57,6 +57,40 @@ void forward() {
     slightlyLeft();
   }
 }
+
+void slightlyRight(){
+  //input a simulation value to set the speed
+  analogWrite(speedpinA, _speed1);
+  analogWrite(speedpinB, _speed2);
+
+  //turn DC Motor B move anticlockwise
+  digitalWrite(pinI4,LOW);
+  digitalWrite(pinI3,HIGH);
+
+  //turn DC Motor A move clockwise
+  digitalWrite(pinI2,LOW);
+  digitalWrite(pinI1,HIGH);
+
+  delay(200); 
+  stop();
+}
+
+void slightlyLeft(){
+  //input a simulation value to set the speed
+  analogWrite(speedpinA,_speed1);
+  analogWrite(speedpinB,_speed2);
+  
+  //turn DC Motor B move clockwise
+  digitalWrite(pinI4,HIGH);
+  digitalWrite(pinI3,LOW);
+
+  //turn DC Motor A move clockwise
+  digitalWrite(pinI2,HIGH);
+  digitalWrite(pinI1,LOW);
+
+  delay(200);
+  stop();
+}
  
 void backward() {
   //input a simulation value to set the speed
@@ -99,45 +133,17 @@ void right() {
   digitalWrite(pinI2,LOW);
   digitalWrite(pinI1,HIGH);
 }
-
-void slightlyRight(){
-  //input a simulation value to set the speed
-  analogWrite(speedpinA, _speed1);
-  analogWrite(speedpinB, _speed2);
-
-  //turn DC Motor B move anticlockwise
-  digitalWrite(pinI4,LOW);
-  digitalWrite(pinI3,HIGH);
-
-  //turn DC Motor A move clockwise
-  digitalWrite(pinI2,LOW);
-  digitalWrite(pinI1,HIGH);
-
-  delay(200); 
-  stop();
-}
-
-void slightlyLeft(){
-  //input a simulation value to set the speed
-  analogWrite(speedpinA,_speed1);
-  analogWrite(speedpinB,_speed2);
-  
-  //turn DC Motor B move clockwise
-  digitalWrite(pinI4,HIGH);
-  digitalWrite(pinI3,LOW);
-
-  //turn DC Motor A move clockwise
-  digitalWrite(pinI2,HIGH);
-  digitalWrite(pinI1,LOW);
-
-  delay(200);
-  stop();
-}
  
 void stop() {
   digitalWrite(speedpinA,LOW); 
   digitalWrite(speedpinB,LOW);
-  delay(100);
+  delay(500);
+}
+
+void stop(int stop_time) {
+  digitalWrite(speedpinA,LOW); 
+  digitalWrite(speedpinB,LOW);
+  delay(stop_time);
 }
 
 int getRight() {
@@ -161,15 +167,15 @@ int getLeft() {
 }
 
 int getFront() {
-  digitalWrite(trigger, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigger, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigger, LOW);
-  short duration = pulseIn(echo, HIGH);
-  int result = abs((5 * duration) / 29.1) - 10;
-  if (result > 255) {
-    result = 255;
+  int result = -1;
+  while (result <= 0 || result > 255) {
+    digitalWrite(trigger, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigger, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigger, LOW);
+    short duration = pulseIn(echo, HIGH);
+    result = ((5 * duration) / 29.1) - 50;
   }
   return result;
 }
@@ -185,50 +191,61 @@ void go90Right() {
 }
 
 int getState() {
-  _front = 0;
-  for (int i = 0; i < 5; i++) {
-    _front += getFront();
-  }
-  _front /= 5;
+  _front = getFront();
   Serial.println("Front: " + String(_front));
   _right = getRight();
   _left = getLeft();
-
+  
   if (_front >= wallDistance) {
     front_free = true;
   } else {
     front_free = false;
   }
 
-  if (_left >= distanceThreshold) {
+  if (_left == distanceThreshold) {
     left_free = true;
   } else {
     left_free = false;
   }
 
-  if (_right >= distanceThreshold) {
+  if (_right == distanceThreshold) {
     right_free = true;
   } else {
     right_free = false;
   }
 
-  if (front_free && !left_free && !right_free) {
+  /*
+   *          F L R
+   * State 0: 0 0 0 - Go Straight
+   * State 1: 0 0 1 - Go 90 Left
+   * State 2: 0 1 0 - Go 90 Right
+   * State 3: 0 1 1 - Go Straight
+   * State 4: 1 0 0 - Go 90 Left
+   * State 5: 1 0 1 - Go 90 Left
+   * State 6: 1 1 0 - Go 90 Right
+   * State 7: 1 1 1 - Turn Around
+   * 
+   * 0 = Nothing in front of it
+   * 1 = Something in front of it but not at wallDistance
+   */
+
+  if (front_free && left_free && right_free) {
     return 0;
-  } else if (front_free && left_free && right_free) {
-    return 0;
-  } else if (front_free && !left_free && right_free) {
-    return 1;
-  } else if (!front_free && left_free && right_free) {
-    return 1;
-  } else if (!front_free && !left_free && right_free) {
-    return 1;
-  } else if (!front_free && !left_free && !right_free) {
-    return 2;
   } else if (front_free && left_free && !right_free) {
+    return 1;
+  } else if (front_free && !left_free && right_free) {
+    return 2;
+  } else if (front_free && !left_free && !right_free) {
     return 3;
+  } else if (!front_free && left_free && right_free) {
+    return 4;
   } else if (!front_free && left_free && !right_free) {
-    return 3;
-  } 
+    return 5;
+  } else if (!front_free && !left_free && right_free) {
+    return 6;
+  } else if (!front_free && !left_free && !right_free) {
+    return 7;
+  }
 }
 
 // Car control routine
@@ -260,56 +277,52 @@ void setup() {
 }
 
 void loop() {
+  // State Filtering
   int state = getState();
+  stop(0);
+  int curr_state = state;
+  for (int i = 0; i < 10; i++) {
+    int state = getState();
+    if (state != curr_state) {
+      i = 0;
+      curr_state = state;
+    }
+    delay(20);
+  }
  
   switch (state) {
-    case 0: {
+    case 0: 
+    case 3: {
       // Move forward
       forward();
-      delay(1000);
+      delay(2000);
     } break;
-    case 1: {
+    case 2: 
+    case 6: {
       // Move right, then forward
-      backward();
-      delay(500);
       go90Right();
+      stop();
       forward();
       delay(2000);
     } break;
-    case 2: {
-      // Turn around, then forward
-      backward();
-      delay(500);
-      go90Right();
-      go90Right();
-      forward();
-      delay(500);
-    } break;
-    case 3: {
+    case 1: 
+    case 4: 
+    case 5: {
       // Move left, then forward
-      delay(500);
       go90Left();
+      stop();
       forward();
       delay(2000);
     } break;
-    default: break;
+    case 7: {
+        // Turn around, then forward
+        go90Right();
+        stop();
+        go90Right();
+        stop();
+        forward();
+        delay(2000);
+      } break;
+    default: forward(); break;
   }
-
-  /*
-  // Handle the event that something is in the front
-  if (_front <= distanceThreshold) {
-    if (_left > wallDistance) {
-      go90Left();
-    } else if (_right > wallDistance) {
-      go90Right();
-    }
-  }
-
-  forward();
-  if (getLeft() <= wallDistance) {
-    slightlyRight();
-  }
-  if (getRight() <= wallDistance) {
-    slightlyLeft();
-  }*/
 }
