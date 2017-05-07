@@ -6,6 +6,7 @@ extern "C" {
 }
 
 #include "Adafruit_VL6180X.h"
+#include <StackArray.h>
 
 // Motor
 #define pinI1     8  //define IN1 interface - motor A
@@ -24,37 +25,55 @@ extern "C" {
 // Laser Range sensors
 Adafruit_VL6180X lasers;
 byte sensor1_pin = 2; // right
-byte sensor2_pin = 6; // left
+byte sensor2_pin = 7; // left
 
-const int distanceThreshold = 255; 
-const int wallDistance = 40;
-int _front;
-int _left;
-int _right;
+// Control variables
+const byte distanceThreshold = 255; 
+const byte wallDistance = 25;
+const byte statesToFilter = 10;
+byte _front;
+byte _left;
+byte _right;
 bool front_free = false;
 bool left_free = false;
 bool right_free = false;
+byte last_state;
+
+// Change these based on battery power and floor type
+const byte frontOffset = 125;
+const short forwardLength = 100;
+const short go90Length = 500;
+const byte slightlyLength = 100;
 
 // Motor control routines
-void forward() {
-  //input a simulation value to set the speed
-  analogWrite(speedpinA,_speed1);
-  analogWrite(speedpinB,_speed2);
+void forward(bool correction) {
+  Serial.println("Going forward");
+  short delay_count = 0;
+  while (delay_count < forwardLength) {
+    //input a simulation value to set the speed
+    analogWrite(speedpinA,_speed1);
+    analogWrite(speedpinB,_speed2);
+  
+    //turn DC Motor B move clockwise
+    digitalWrite(pinI4,LOW);
+    digitalWrite(pinI3,HIGH);
+  
+    //turn DC Motor A move anticlockwise
+    digitalWrite(pinI2,HIGH);
+    digitalWrite(pinI1,LOW);
 
-  //turn DC Motor B move clockwise
-  digitalWrite(pinI4,LOW);
-  digitalWrite(pinI3,HIGH);
+    if (correction) {
+      if (getLeft() <= wallDistance) {
+        slightlyRight();
+      }
+    
+      if (getRight() <= wallDistance) {
+        slightlyLeft();
+      }
+    }
 
-  //turn DC Motor A move anticlockwise
-  digitalWrite(pinI2,HIGH);
-  digitalWrite(pinI1,LOW);
-
-  if (getLeft() <= wallDistance) {
-    slightlyRight();
-  }
-
-  if (getRight() <= wallDistance) {
-    slightlyLeft();
+    delay(50);
+    delay_count += 50;
   }
 }
 
@@ -71,8 +90,7 @@ void slightlyRight(){
   digitalWrite(pinI2,LOW);
   digitalWrite(pinI1,HIGH);
 
-  delay(200); 
-  stop();
+  delay(slightlyLength); 
 }
 
 void slightlyLeft(){
@@ -88,10 +106,9 @@ void slightlyLeft(){
   digitalWrite(pinI2,HIGH);
   digitalWrite(pinI1,LOW);
 
-  delay(200);
-  stop();
+  delay(slightlyLength);
 }
- 
+
 void backward() {
   //input a simulation value to set the speed
   analogWrite(speedpinA,_speed1);
@@ -134,67 +151,74 @@ void right() {
   digitalWrite(pinI1,HIGH);
 }
  
-void stop() {
-  digitalWrite(speedpinA,LOW); 
-  digitalWrite(speedpinB,LOW);
-  delay(500);
-}
-
-void stop(int stop_time) {
+void stop(short stop_time) {
   digitalWrite(speedpinA,LOW); 
   digitalWrite(speedpinB,LOW);
   delay(stop_time);
 }
 
-int getRight() {
-  delay(50);
+byte getRight() {
+  delay(10);
   digitalWrite(sensor2_pin, LOW); 
   digitalWrite(sensor1_pin, HIGH); 
   lasers.begin(); 
   delay(1);
-  // Serial.println("Right: " + String(lasers.readRange()));
   return lasers.readRange();
 }
 
-int getLeft() {
-  delay(50);
+byte getLeft() {
+  delay(10);
   digitalWrite(sensor1_pin, LOW); 
   digitalWrite(sensor2_pin, HIGH); 
   lasers.begin();
   delay(1);
-  // Serial.println("Left: " + String(lasers.readRange()));
   return lasers.readRange();
 }
 
-int getFront() {
-  int result = -1;
-  while (result <= 0 || result > 255) {
-    digitalWrite(trigger, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigger, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigger, LOW);
-    short duration = pulseIn(echo, HIGH);
-    result = ((5 * duration) / 29.1) - 50;
+short getFront() {
+  digitalWrite(trigger, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigger, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger, LOW);
+  
+  long duration = pulseIn(echo, HIGH);
+  short result = ((5 * duration) / 29.1) + frontOffset;
+  if (result > 255) {
+    result = 255;
   }
   return result;
 }
 
+void turnAround() {
+  right();
+  delay(2 * go90Length);  
+}
+
 void go90Left() {
+  forward(false);
   left();
-  delay(750);  
+  delay(go90Length);  
+  stop(100);
+  forward(true);
 }
 
 void go90Right() {
+  forward(false);
   right();
-  delay(750);  
+  delay(go90Length);  
+  stop(100);
+  forward(true);
 }
 
-int getState() {
+byte getState() {
   _front = getFront();
-  Serial.println("Front: " + String(_front));
   _right = getRight();
   _left = getLeft();
+
+  Serial.println("Front: " + String(_front));
+  Serial.println("Left: " + String(_left));
+  Serial.println("Right: " + String(_right));
   
   if (_front >= wallDistance) {
     front_free = true;
@@ -216,11 +240,12 @@ int getState() {
 
   /*
    *          F L R
+   *          -----
    * State 0: 0 0 0 - Go Straight
    * State 1: 0 0 1 - Go 90 Left
    * State 2: 0 1 0 - Go 90 Right
    * State 3: 0 1 1 - Go Straight
-   * State 4: 1 0 0 - Go 90 Left
+   * State 4: 1 0 0 - Go 90 Right
    * State 5: 1 0 1 - Go 90 Left
    * State 6: 1 1 0 - Go 90 Right
    * State 7: 1 1 1 - Turn Around
@@ -271,58 +296,44 @@ void setup() {
   digitalWrite(sensor2_pin, LOW);
   Wire.begin();
 
+  // Pause before starting the system
   delay(2500);
-  // Start car
-  forward();
 }
 
 void loop() {
   // State Filtering
-  int state = getState();
   stop(0);
+  int state = getState();
   int curr_state = state;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < statesToFilter; i++) {
     int state = getState();
     if (state != curr_state) {
       i = 0;
       curr_state = state;
     }
-    delay(20);
+    delay(5);
   }
+
+  Serial.println("In state:" + String(state));
  
   switch (state) {
     case 0: 
-    case 3: {
-      // Move forward
-      forward();
-      delay(2000);
-    } break;
+    case 3: { forward(true); } break;
     case 2: 
-    case 6: {
-      // Move right, then forward
-      go90Right();
-      stop();
-      forward();
-      delay(2000);
-    } break;
-    case 1: 
     case 4: 
-    case 5: {
-      // Move left, then forward
-      go90Left();
-      stop();
-      forward();
-      delay(2000);
-    } break;
+    case 6: { go90Right(); } break;
+    case 1: 
+    case 5: { go90Left(); } break;
     case 7: {
-        // Turn around, then forward
-        go90Right();
-        stop();
-        go90Right();
-        stop();
-        forward();
-        delay(2000);
+        if (last_state != 2 || last_state != 4 || last_state != 6) {
+          turnAround();
+          forward(true);
+        } else {
+          exit(0);
+        }
       } break;
-    default: forward(); break;
+    default: forward(true); break;
   }
+
+  last_state = state;
 }
