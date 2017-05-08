@@ -152,39 +152,34 @@ unsigned char getState()
 
 void navigation_mainLoop()
 {
-    while(true)
+    switch(getState())
     {
-        switch(getState())
-        {
-        case NAVIGATION_FRONT:
-            go90Right();
-            break;
-        case NAVIGATION_LEFT:
-            forward();
-            break;
-        case NAVIGATION_RIGHT:
-            forward();
-            break;
-        case NAVIGATION_FRONT | NAVIGATION_LEFT:
-            go90Right();
-            break;
-        case NAVIGATION_FRONT | NAVIGATION_RIGHT:
-            go90Left();
-            break;
-        case NAVIGATION_LEFT | NAVIGATION_RIGHT:
-            forward();
-            break;
-        case NAVIGATION_FRONT | NAVIGATION_LEFT | NAVIGATION_RIGHT:
-            go90Right();
-            go90Right();
-            break;
-        }
-        delay(400);
-        stop();
+    case NAVIGATION_FRONT:
+        go90Right();
+        break;
+    case NAVIGATION_LEFT:
+        forward();
+        break;
+    case NAVIGATION_RIGHT:
+        forward();
+        break;
+    case NAVIGATION_FRONT | NAVIGATION_LEFT:
+        go90Right();
+        break;
+    case NAVIGATION_FRONT | NAVIGATION_RIGHT:
+        go90Left();
+        break;
+    case NAVIGATION_LEFT | NAVIGATION_RIGHT:
+        forward();
+        break;
+    case NAVIGATION_FRONT | NAVIGATION_LEFT | NAVIGATION_RIGHT:
+        go90Right();
+        go90Right();
+        break;
     }
+    delay(400);
+    stop();
 }
-
-
 
 /********** End navigation **********/
 
@@ -218,7 +213,7 @@ void setup() {
 }
 
 void loop() {
-  while (getFront() <= distanceThreshold) {
+  /*while (getFront() <= distanceThreshold) {
     backward();
   }
   forward();
@@ -231,5 +226,8 @@ void loop() {
   while (getRight() <= distanceThreshold) {
     left();
   }
-  forward();
+  forward();*/
+  //Does arduino call "loop" repetedly on its own,
+  //or does this need to be surrounded by a "while(true)"?
+  navigation_mainLoop();
 }
