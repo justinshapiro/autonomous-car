@@ -6,7 +6,6 @@ extern "C" {
 }
 
 #include "Adafruit_VL6180X.h"
-#include <StackArray.h>
 
 // Motor
 #define pinI1     8  //define IN1 interface - motor A
@@ -15,8 +14,8 @@ extern "C" {
 #define pinI3     12 //define IN3 interface - motor B
 #define pinI4     13 //define IN4 interface - motor B
 #define speedpinB 10 //enable motor B
-#define _speed1   150 // define the speed of motor A (left wheel)
-#define _speed2   150 // define the speed of motor B (right wheel)
+#define _speed1   175 // define the speed of motor A (left wheel)
+#define _speed2   175 // define the speed of motor B (right wheel)
 
 // Ultrasonic sensor
 #define trigger 6
@@ -30,7 +29,7 @@ byte sensor2_pin = 7; // left
 // Control variables
 const byte distanceThreshold = 255; 
 const byte wallDistance = 25;
-const byte statesToFilter = 10;
+const byte statesToFilter = 5;
 byte _front;
 byte _left;
 byte _right;
@@ -38,10 +37,11 @@ bool front_free = false;
 bool left_free = false;
 bool right_free = false;
 byte last_state;
+byte front255 = 0;
 
 // Change these based on battery power and floor type
-const byte frontOffset = 125;
-const short forwardLength = 100;
+const int frontOffset = -50;
+const short forwardLength = 300;
 const short go90Length = 500;
 const byte slightlyLength = 100;
 
@@ -125,8 +125,8 @@ void backward() {
  
 void left() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA,_speed1);       // need to make these speed values smaller if we 
-  analogWrite(speedpinB,_speed2);       // want smaller turns (or really small and add a delay as necessary)
+  analogWrite(speedpinA,_speed1 + 30);       // need to make these speed values smaller if we 
+  analogWrite(speedpinB,_speed2 + 30);       // want smaller turns (or really small and add a delay as necessary)
   
   //turn DC Motor B move clockwise
   digitalWrite(pinI4,HIGH);
@@ -139,8 +139,8 @@ void left() {
  
 void right() {
   //input a simulation value to set the speed
-  analogWrite(speedpinA, _speed1);
-  analogWrite(speedpinB, _speed2);
+  analogWrite(speedpinA, _speed1 + 30);
+  analogWrite(speedpinB, _speed2 + 30);
 
   //turn DC Motor B move anticlockwise
   digitalWrite(pinI4,LOW);
@@ -176,18 +176,25 @@ byte getLeft() {
 }
 
 short getFront() {
-  digitalWrite(trigger, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigger, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigger, LOW);
-  
-  long duration = pulseIn(echo, HIGH);
-  short result = ((5 * duration) / 29.1) + frontOffset;
-  if (result > 255) {
-    result = 255;
+  int result = 0;
+  for (byte i = 0; i < 10; i++) {
+    digitalWrite(trigger, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigger, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigger, LOW);
+    
+    long duration = pulseIn(echo, HIGH);
+    short this_result = ((5 * duration) / 29.1) + frontOffset;
+    //Serial.println("Raw front data: " + String(this_result));
+    if (this_result > 255) {
+      this_result = 255;
+    }
+
+    result += this_result;
   }
-  return result;
+  
+  return result / 10;
 }
 
 void turnAround() {
@@ -195,16 +202,22 @@ void turnAround() {
   delay(2 * go90Length);  
 }
 
-void go90Left() {
-  forward(false);
+void go90Left(bool _forward) {
+  if (_forward) {
+    forward(false);
+    forward(false);
+  }
   left();
   delay(go90Length);  
   stop(100);
   forward(true);
 }
 
-void go90Right() {
-  forward(false);
+void go90Right(bool _forward) {
+  if (_forward) {
+    forward(false);
+    forward(false);
+  }
   right();
   delay(go90Length);  
   stop(100);
@@ -220,7 +233,7 @@ byte getState() {
   Serial.println("Left: " + String(_left));
   Serial.println("Right: " + String(_right));
   
-  if (_front >= wallDistance) {
+  if (_front > wallDistance && _front <= distanceThreshold) {
     front_free = true;
   } else {
     front_free = false;
@@ -306,7 +319,7 @@ void loop() {
   int state = getState();
   int curr_state = state;
   for (int i = 0; i < statesToFilter; i++) {
-    int state = getState();
+    state = getState();
     if (state != curr_state) {
       i = 0;
       curr_state = state;
@@ -314,16 +327,28 @@ void loop() {
     delay(5);
   }
 
+  byte _front = getFront();
+
+  if (_front == 255 || _front < 5) {
+    front255++;
+  } else {
+    front255 = 0;
+  }
+
   Serial.println("In state:" + String(state));
+
+  if ((state == 2 || state == 3) && (last_state == 1 || last_state == 5)) {
+    state = 6;
+  }
  
   switch (state) {
     case 0: 
-    case 3: { forward(true); } break;
     case 2: 
+    case 3: { forward(true); } break;
     case 4: 
-    case 6: { go90Right(); } break;
+    case 6: { go90Right(true); } break;
     case 1: 
-    case 5: { go90Left(); } break;
+    case 5: { go90Left(true); } break;
     case 7: {
         if (last_state != 2 || last_state != 4 || last_state != 6) {
           turnAround();
@@ -335,5 +360,19 @@ void loop() {
     default: forward(true); break;
   }
 
+  if (last_state == 4 && state == 4) {
+    backward();
+    delay(500);
+    go90Left(false);
+  }
+
   last_state = state;
+
+  Serial.println("Front255 = " + String(front255));
+  if (front255 == 3) {
+    backward();
+    delay(500);
+    slightlyLeft();
+    front255 = 0;
+  }
 }
